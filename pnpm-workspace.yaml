@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# satori pins an affected fflate version; use the patched compatible release.
+overrides:
+  "satori>fflate": "0.7.5"

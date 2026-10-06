@@ -1,0 +1,89 @@
+name: Roll back launcher
+on:
+  workflow_dispatch:
+    inputs:
+      verified_run_id:
+        description: Successful Deploy launcher run containing the previously verified release
+        required: true
+        type: string
+      reason:
+        description: Incident or recovery reason (no sensitive data)
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  rollback:
+    if: false && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    concurrency:
+      group: slice-launcher-production
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Initialize isolated paths
+        run: |
+          echo "VERIFIED_RUN_PATH=$RUNNER_TEMP/verified-run.json" >> "$GITHUB_ENV"
+          echo "PROVENANCE_DIRECTORY=$RUNNER_TEMP/rollback-provenance" >> "$GITHUB_ENV"
+      - name: Validate source run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED_RUN_ID: ${{ inputs.verified_run_id }}
+        run: |
+          [[ "$VERIFIED_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN_ID" > "$VERIFIED_RUN_PATH"
+          node scripts/release-provenance.mjs source-run
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: verified-release
+          path: ${{ env.PROVENANCE_DIRECTORY }}
+          run-id: ${{ inputs.verified_run_id }}
+          github-token: ${{ github.token }}
+      - name: Validate recorded version and provenance
+        id: target
+        run: node scripts/release-provenance.mjs rollback-target
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Restore the explicitly selected verified version
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          SLICE_LAUNCHER_URL: ${{ vars.SLICE_LAUNCHER_URL }}
+          ACCESS_TEAM_DOMAIN: https://snowy-voice-36a1.cloudflareaccess.com
+          EXPECTED_RELEASE_SHA: ${{ steps.target.outputs.source }}
+          EXPECTED_VERSION: ${{ steps.target.outputs.version }}
+          ROLLBACK_REASON: ${{ inputs.reason }}
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CF_ACCESS_CLIENT_ID"
+          test -n "$CF_ACCESS_CLIENT_SECRET"
+          test -n "$SLICE_LAUNCHER_URL"
+          pnpm --filter @slice/launcher exec wrangler rollback "$EXPECTED_VERSION" --name slice-launcher --message "$ROLLBACK_REASON"
+          node scripts/check-launcher.mjs "$SLICE_LAUNCHER_URL"
+          pnpm --filter @slice/launcher exec wrangler deployments status --name slice-launcher --json > deployment.json
+          node scripts/release-provenance.mjs check-rollback
+      - name: Record recovery evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rollback-evidence
+          path: |
+            ${{ env.PROVENANCE_DIRECTORY }}/verified-release.json
+            deployment.json
+          retention-days: 90
+      - if: failure()
+        run: echo "Rollback or verification failed. Investigate before another production change." >> "$GITHUB_STEP_SUMMARY"

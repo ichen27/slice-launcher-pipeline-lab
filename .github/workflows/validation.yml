@@ -1,0 +1,82 @@
+name: Shared validation
+on:
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
+    outputs:
+      artifact-id:
+        value: ${{ jobs.checks.outputs.artifact-id }}
+      content-digest:
+        value: ${{ jobs.checks.outputs.content-digest }}
+      artifact-digest:
+        value: ${{ jobs.checks.outputs.artifact-digest }}
+permissions:
+  contents: read
+jobs:
+  checks:
+    name: Quality, browser tests, and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
+      content-digest: ${{ steps.fingerprint.outputs.content-digest }}
+    env:
+      SLICE_RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate workflow syntax
+        run: |
+          curl --fail --silent --show-error --location --max-time 60 https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz -o "$RUNNER_TEMP/actionlint.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          # GitHub supports queue:max; actionlint 1.7.12 has not added this key yet.
+          "$RUNNER_TEMP/actionlint" -shellcheck='' -ignore 'unexpected key "queue" for "concurrency" section'
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:coverage
+      - run: pnpm test:migrations
+      - run: pnpm --filter @slice/launcher exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - name: Build the release once
+        run: pnpm build
+      - run: pnpm smoke:launcher
+      - name: Fingerprint and inspect deployable files
+        id: fingerprint
+        run: node scripts/release-artifact.mjs create apps/launcher/dist release-manifest.json "$GITHUB_SHA"
+      - name: Upload immutable release
+        if: inputs.release
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: launcher-release
+          path: |
+            apps/launcher/dist/
+            release-manifest.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Synthetic browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-diagnostics
+          path: |
+            apps/launcher/playwright-report/
+            apps/launcher/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

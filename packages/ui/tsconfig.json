@@ -1,0 +1,5 @@
+{
+  "extends": "@slice/config/tsconfig",
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules"]
+}

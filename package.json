@@ -1,0 +1,31 @@
+{
+  "name": "slice-launcher",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.17.1",
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @slice/launcher dev",
+    "build": "pnpm -r --if-present build",
+    "lint": "pnpm check:workspace && node scripts/check-architecture.mjs && eslint . && pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "node --test scripts/*.test.mjs && pnpm -r --if-present test",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "check:workspace": "node scripts/check-workspace.mjs",
+    "smoke:launcher": "node scripts/smoke-launcher.mjs",
+    "test:e2e": "pnpm --filter @slice/launcher test:e2e",
+    "test:coverage": "pnpm --filter @slice/launcher test:coverage",
+    "test:migrations": "pnpm --filter @slice/launcher test:migrations"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "@slice/config": "workspace:*"
+  }
+}

@@ -1,0 +1,16 @@
+node_modules
+pnpm-lock.yaml
+.superpowers
+**/dist
+**/.vinext
+**/.next
+**/.wrangler
+**/worker-configuration.d.ts
+**/next-env.d.ts
+
+**/coverage
+**/test-results
+**/playwright-report
+**/.e2e
+
+ai-review-output
