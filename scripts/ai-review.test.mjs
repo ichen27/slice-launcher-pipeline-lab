@@ -527,3 +527,27 @@ test("live paired evaluation accepts Cloudflare-only credentials", async () => {
   assert.equal(report.config.gptModel, "gpt-6-sol");
   assert.ok(report.runs.every((run) => ["completed", "incomplete"].includes(run.result.status)));
 });
+
+test("GitHub transport permits exact commit comparisons while rejecting traversal", async () => {
+  const { githubApi } = await import("./ai-review/github.mjs");
+  const seen = [];
+  const api = githubApi("owner/repo", "synthetic-token", async (url) => {
+    seen.push(url);
+    return response({ merge_base_commit: { sha: base } });
+  });
+  assert.deepEqual(await api("/compare/" + base + "..." + head), {
+    merge_base_commit: { sha: base },
+  });
+  assert.deepEqual(seen, [
+    "https://api.github.com/repos/owner/repo/compare/" + base + "..." + head,
+  ]);
+  for (const path of [
+    "/../secrets",
+    "/contents/../../secrets",
+    "/compare/main...evil",
+    "/compare/" + base + "..." + head + "/../secrets",
+  ]) {
+    await assert.rejects(api(path), /GitHub request bound/);
+  }
+  assert.equal(seen.length, 1);
+});

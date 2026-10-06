@@ -18,7 +18,12 @@ export function githubApi(repository, token, fetcher = fetch) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error("Invalid repository");
   let calls = 0;
   return async (path, options = {}) => {
-    if (++calls > 220 || !path.startsWith("/") || path.includes("..") || path.includes("#"))
+    if (
+      ++calls > 220 ||
+      !path.startsWith("/") ||
+      (path.includes("..") && !/^\/compare\/[a-f0-9]{40}\.\.\.[a-f0-9]{40}$/.test(path)) ||
+      path.includes("#")
+    )
       throw new Error("GitHub request bound");
     return boundedJson(
       await fetcher("https://api.github.com/repos/" + repository + path, {
