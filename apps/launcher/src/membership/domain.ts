@@ -19,7 +19,7 @@ export function effectivePermissions(state: State, member: Member): string[] {
   if (member.owner) return permissionCatalog.map((p) => p.id).sort();
   const base = state.levels.find((level) => level.id === member.levelId)?.permissions ?? [];
   return [...new Set([...base, ...member.allow])]
-    .filter((p) => !member.deny.includes(p) && permissionCatalog.some((item) => item.id === p))
+    .filter((p) => permissionCatalog.some((item) => item.id === p))
     .sort();
 }
 function subjectMember(state: State, subject: string): Member {
