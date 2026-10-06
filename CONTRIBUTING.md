@@ -1,7 +1,7 @@
 # Contributing
 
 Use the Node/pnpm versions in package.json and install with `pnpm install --frozen-lockfile`.
-Keep changes focused. See [architecture standards](docs/architecture.md), [security review](docs/security-review.md), [adding an app](docs/adding-an-app.md), and [release operations](docs/deployment.md).
+Keep changes focused and use the repository-pinned tooling. See [architecture standards](docs/architecture.md), [security review](docs/security-review.md), [adding an app](docs/adding-an-app.md), and [release operations](docs/deployment.md).
 
 Before requesting review run formatting, lint, typecheck, tests, coverage, migration tests, browser tests, build, and Worker smoke as listed in the shared validation workflow. Browser tests use disposable synthetic identities and data; never use production credentials or members in tests.
 
